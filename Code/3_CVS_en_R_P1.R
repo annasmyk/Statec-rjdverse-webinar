@@ -15,6 +15,7 @@
  # also see readme files for simple examples 
 
 ipi <- read.csv2("Data/IPI_nace4.csv")
+str(ipi)
 ipi$DATE <- as.Date(ipi$DATE, format = "%d/%m/%Y")
 ipi[, -1] <- sapply(ipi[, -1], as.numeric)
 View(ipi)
@@ -26,6 +27,7 @@ View(ipi)
 
  # creating a TS object from a data frame
 y_raw <- ts(ipi[, "RF3030"], frequency = 12, start = c(1990, 1), end = c(2024, 1))
+y_raw<- window(y_raw, start=c(2012,1))
 
 
 
@@ -36,11 +38,12 @@ sa_x13_v2  # Naviguer avec $...
 #  see help pages for default spec names, identical in v2 and v3
 # Tramo-Seats
 sa_ts_v2 <- RJDemetra::tramoseats(y_raw, spec = "RSAfull")
-sa_ts_v2
+sa_ts_v2$final$series |> class()
+sa_ts_v2$final$forecasts
 
 # X13 v3
-sa_x13_v3 <- rjd3x13::x13(y_raw, spec = "RSA5")
-sa_x13_v3
+sa_x13_v3 <- rjd3x13::x13(y_raw, spec = "RSA3")
+sa_x13_v3$user_defined
 
 
 
@@ -66,6 +69,8 @@ lines(y_raw, col="red")
 # Tramo seats v3
 
 sa_ts_v3 <- rjd3tramoseats::tramoseats(y_raw, spec = "RSAfull")
+print(sa_ts_v3)
+summary(sa_ts_v3)
 
 sa_ts_v3$result
 
@@ -96,8 +101,8 @@ sa_ts_v3$result
  
 # IN v3
 # X13
- sa_regarima_v3 <- rjd3x13::regarima(y_raw, spec = "RG5c")
-
+ sa_regarima_v3 <- rjd3x13::regarima(y_raw, spec = "RG3")
+summary(sa_regarima_v3)
 # Tramo seats
 sa_tramo_v3 <- rjd3tramoseats::tramo(y_raw, spec = "TRfull")
 
@@ -139,14 +144,15 @@ Model_sa <- RJDemetra::x13(y_raw, spec = "RSA5")
 ### Pre adjustment series 
  
 # Version 2
-sa_x13_v2$regarima$model$effects #MTS object
+ts_p<-sa_x13_v2$regarima$model$effects #MTS object
+y_lin<-ts_p[,1]
 
 #forecast accessible only via user defined output (cf below)
 
 # Version 3: "x11 names" : preadjustement effets as stored in the A table
 # see doc chap x11 for names
 
-sa_x13_v3$result$preadjust$a6
+sa_x13_v3$result$preadjust
 
 # Decomposition (no preadjustment effect)
 # Version 3
@@ -171,8 +177,8 @@ sa_x13_v3$result$decomposition$d5  #tables from D1 to D13
  # exemple doc 
  y<- ipi_c_eu[, "FR"]
  user_defined_variables("X13-ARIMA")
- m <- x13(y,"RSA5c", userdefined=c("b20","ycal","residuals.kurtosis" ))
- m$user_defined$b20
+ m <- x13(y,"RSA5c", userdefined=c("decomposition.b1","ycal","residuals.kurtosis" ))
+ m$user_defined$decomposition.b1 # serie linearisee
  m$user_defined$ycal
  m$user_defined$residuals.kurtosis
  user_defined_variables("TRAMO-SEATS")
@@ -198,10 +204,10 @@ sa_x13_v3$result$decomposition$d5  #tables from D1 to D13
  sa_x13_v3_UD$user_defined  #names
 
  # retrieve the object
- sa_x13_v3_UD$user_defined$decomposition.b1
+ sa_x13_v3_UD$user_defined$cal
 
  ########################################################################################
-### Specification customization
+###                         Specification customization
  
 ############################# version 2 
 ## (att: bien preciser le package ) pour les fonctions qui ont un nom identique 
@@ -434,7 +440,7 @@ print(x13_spec_d)
 # check results
 m <- rjd3x13::x13(y_raw, x13_spec_d)
 
-# auxiliairy regressors 
+# auxiliary regressors 
 m$result$preprocessing$estimation$X
 
 ### X11 parameters 

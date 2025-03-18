@@ -23,6 +23,8 @@ plot(ts)
 # exemple 2
 ts<-rjd3toolkit::ABS$X0.2.09.10.M
 plot(ts)
+rjd3toolkit::ABS$X0.2.09.10.M |> class()
+
 
 ### Import de data frame et creation d'objets TS
 
