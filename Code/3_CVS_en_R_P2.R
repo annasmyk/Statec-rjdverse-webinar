@@ -1,0 +1,332 @@
+# Seasonal adjustment in R with JD+ : PART 2 ----------------------------------
+
+library("dplyr")
+library("zoo")
+library("xts")
+library("tsbox")
+library("imputeTS")
+library("lubridate")
+library("rjd3toolkit")
+library("RJDemetra")
+library("rjd3x13")
+library("rjd3tramoseats")
+
+# also see readme files for simple examples 
+
+ipi <- read.csv2("Data/IPI_nace4.csv")
+ipi$DATE <- as.Date(ipi$DATE, format = "%d/%m/%Y")
+ipi[, -1] <- sapply(ipi[, -1], as.numeric)
+# View(ipi)
+# creating a TS object from a data frame
+y_raw <- ts(ipi[, "RF3030"], frequency = 12, start = c(1990, 1), end = c(2024, 1))
+y_new <- ts(ipi[, "RF3030"], frequency = 12, start = c(1990, 1), end = c(2024, 1))
+
+
+# X13 v2
+sa_x13_v2 <- RJDemetra::x13(y_raw, spec = "RSA5c")
+sa_x13_v2  # Naviguer avec $...
+
+#  see help pages for default spec names, identical in v2 and v3
+# Tramo-Seats
+sa_ts_v2 <- RJDemetra::tramoseats(y_raw, spec = "RSAfull")
+sa_ts_v2
+
+# X13 v3
+sa_x13_v3 <- rjd3x13::x13(y_raw, spec = "RSA5")
+sa_x13_v3
+
+### IN version 2
+
+### defining user defined trading days
+spec_td <- x13_spec(spec_1,
+                    tradingdays.option = "UserDefined",
+                    tradingdays.test ="None",
+                    usrdef.varEnabled = TRUE,
+                    the user defined variable will be assigned to the calendar component
+                    usrdef.varType="Calendar",
+                    usrdef.var=td_regs )  regressors have to be a single or multiple TS
+new sa processing
+sa_x13_v2_4 <- x13(y_raw, spec_td)
+user defined intervention variable
+spec_int <- x13_spec(spec_1,
+                     usrdef.varEnabled = TRUE,
+                     the user defined variable will be assigned to the trend component
+                     usrdef.varType = "Trend",
+                     usrdef.var = x )  x has to to be a single or multiple TS
+new sa processing
+sa_x13_v2_5 <- x13(y_raw, spec_int)
+
+
+# Creating calendar regressors from a calendar 
+
+\small
+```{r,eval = FALSE, echo = TRUE}
+# create national (or other) calendar if needed
+library("rjd3toolkit")
+# French ca
+french_calendar <- national_calendar(
+  days = list(
+    fixed_day(7, 14), # Bastille Day
+    fixed_day(5, 8, validity = list(start = "1982-05-08")), # End of 2nd WW
+    special_day("NEWYEAR"),
+    special_day("CHRISTMAS"),
+    special_day("MAYDAY"),
+    special_day("EASTERMONDAY"),
+    special_day("ASCENSION"),
+    special_day("WHITMONDAY"),
+    special_day("ASSUMPTION"),
+    special_day("ALLSAINTSDAY"),
+    special_day("ARMISTICE")
+  )
+)
+```
+
+
+### Step 1: Creating regressors (2/2)
+
+\small
+```{r,eval = FALSE, echo = TRUE}
+# create set of 6 regressors every day is different, contrast with Sunday, based on french national calendar
+regs_td <- rjd3toolkit::calendar_td(
+  calendar = french_calendar,
+  # formats the regressor like your raw series (length, frequency..)
+  s = y_raw,
+  groups = c(1, 2, 3, 4, 5, 6, 0),
+  contrasts = TRUE
+)
+
+# create an intervention variable (to be allocated to "trend")
+iv1 <- intervention_variable(
+  s = y_raw,
+  starts = "2015-01-01",
+  ends = "2015-12-01"
+)
+```
+
+regressors can be any TS object
+
+### Step 2: Creating a modelling context 
+
+\small
+
+Modelling context is necessary for any external regressor (new v3 set up)
+
+```{r,eval = FALSE, echo = TRUE}
+# Gather regressors into a list
+my_regressors <- list(
+  Monday = regs_td[, 1],
+  Tuesday = regs_td[, 2],
+  Wednesday = regs_td[, 3],
+  Thursday = regs_td[, 4],
+  Friday = regs_td[, 5],
+  Saturday = regs_td[, 6],
+  reg1 = iv1
+)
+
+# create modelling context
+my_context <- modelling_context(variables = my_regressors)
+# check variables present in modelling context
+rjd3toolkit::.r2jd_modellingcontext(my_context)$getTsVariableDictionary()
+```
+
+### Step 3: Adding regressors to specification  
+
+\small
+
+```{r,eval = FALSE, echo = TRUE}
+### add calendar regressors to spec
+x13_spec <- rjd3x13::x13_spec("rsa3")
+x13_spec_user_defined <- rjd3toolkit::set_tradingdays(
+  x = x13_spec,
+  option = "UserDefined",
+  uservariable = c(
+    "r.Monday", "r.Tuesday", "r.Wednesday",
+    "r.Thursday", "r.Friday", "r.Saturday"
+  ),
+  test = "None"
+)
+```
+
+###
+
+\small
+```{r,eval = FALSE, echo = TRUE}
+# add intervention variable to spec, choosing the component to allocate the effects to TREND
+x13_spec_user_defined <- add_usrdefvar(
+  x = x13_spec_user_defined,
+  group = "r",
+  name = "reg1",
+  label = "iv1",
+  regeffect = "Trend"
+)
+
+x13_spec_d$regarima$regression$users
+```
+
+### Step 4: Estimating with context 
+
+\small
+
+Applying full user-defined specification 
+
+```{r,eval = FALSE, echo = TRUE}
+sa_x13_ud <- rjd3x13::x13(y_raw, x13_spec_user_defined, context = my_context)
+sa_x13_ud$result$preprocessing
+```
+
+The process would be identical using `rjd3tramoseats::tramoseats`
+
+
+# Refreshing data
+
+### Refreshing data: Estimation_spec vs result_spec
+
+\small
+
+Possibility of refreshing data is a **\color{Orange}{new}** feature of version 3
+
+Convenient option if production process fully in R with TS objects (no workspace structure)
+
+In the "sa_model" object generated by the estimation process:
+  
+  - specification is separated from results 
+
+\footnotesize
+```{r,eval = FALSE, echo = TRUE}
+# Model_sa = sa_x13_v3
+sa_x13_v3 <- rjd3x13::x13(y_raw, spec = "RSA3")
+sa_x13_v3$result
+sa_x13_v3$estimation_spec
+sa_x13_v3$result_spec
+sa_x13_v3$user_defined
+```
+
+
+### Refreshing data: estimation_spec vs result_spec
+
+\small
+In the output object, the specification is split in two:
+  
+  - "estimation_spec" (domain spec): set constraints defining the estimation process, can be a default spec ("RSA3") or a user defined-spec (e.g RSA3 + calendar regressors...)
+
+- "result_spec" (point spec): result of the estimation process, contains selected model, estimated coefficients...enough information so that if applied to raw series would allow to retrieve all output (sa, s, cal...) 
+
+- in v3.x possibility to re-estimate the "result_spec" inside a domain of constraints (estimation spec), freeing only restrictions on selected parameters (just like in GUI, or Cruncher in v2.x)
+
+### Estimation_spec vs result_spec: an example (1/2)
+
+\small 
+
+- estimation spec
+```{r, eval = TRUE, echo = TRUE}
+sa_x13_v3$estimation_spec$regarima$arima
+```
+
+### Estimation_spec vs result_spec: an example (2/2)
+
+\small
+- result spec (or point spec)
+\footnotesize    
+```{r, eval = TRUE, echo = TRUE}
+sa_x13_v3$result_spec$regarima$arima
+```
+
+
+### Refresh Policies (1/2)
+
+\small 
+
+**Fixed**: applying the current pre-adjustment reg-arima model and replacing forecasts by new raw data points.
+
+**FixedParameters**: pre-adjustment reg-arima model is partially modified: regression coefficients will be re-estimated but regression variables, Arima orders and coefficients are unchanged.
+
+**FixedAutoRegressiveParameters**: same as FixedParameters but Arima Moving Average coefficients (MA) are also re-estimated, Auto-regressive (AR) coefficients are kept fixed. When using Seats for decomposition it avoids a possible re-allocation of roots between the trend and seasonal components, which might have led to strong revisions (cf INE at NTTS 2023).
+
+**FreeParameters**: all regression and Arima model coefficients are re-estimated, regression variables and Arima orders are kept fixed.
+
+*Those are policies not involving a data span.*
+  
+  ### Refresh Policies (1/2): an example 
+  
+  \small
+
+\footnotesize
+```{r,eval = FALSE, echo = TRUE}
+sa_x13_v3 <- rjd3x13::x13(y_raw, spec = "rsa3")
+current_result_spec <- sa_x13_v3$result_spec
+current_domain_spec <- sa_x13_v3$estimation_spec
+
+# generate NEW spec for refresh
+refreshed_spec <- rjd3x13::x13_refresh(current_result_spec,
+                                       # point spec to be refreshed
+                                       current_domain_spec,
+                                       # domain spec (set of constraints)
+                                       policy = "Fixed"
+)
+
+# apply the new spec on new data : y_new = y_raw + 6 months
+sa_x13_v3_refreshed <- rjd3x13::x13(y_new, refreshed_spec)
+```
+
+### Refreshed spec: an example {.allowframebreaks} 
+
+\small
+
+\footnotesize
+```{r,eval = TRUE, echo = TRUE}
+# refreshed spec
+refreshed_spec$regarima
+```
+
+### Refresh Policies (2/2)
+
+\small 
+
+*Policies involving a data span.*
+  
+  **Outliers**: regression variables and Arima orders are kept fixed, but outliers will be re-detected, from a given *end*, thus all regression and Arima model coefficients are re-estimated
+
+**Outliers_StochasticComponent**: same as "Outliers" but Arima model orders (p,d,q)(P,D,Q) can also be re-identified.
+
+**Current**: Not Available yet, behaves like "Fixed". Will be: applying the current pre-adjustment reg-arima model and adding the new raw data points as Additive Outliers (defined as new intervention variables)
+
+(see JDemetra+ documentation for complete description of the policies:
+    <https://jdemetra-new-documentation.netlify.app/t-rev-policies-production>) 
+
+### Refresh Policies (2/2): an example
+
+\small
+
+\footnotesize
+```{r,eval = TRUE, echo = TRUE}
+current_result_spec <- sa_x13_v3$result_spec
+current_domain_spec <- sa_x13_v3$estimation_spec
+
+# generate NEW spec for refresh
+refreshed_spec <- rjd3x13::x13_refresh(current_result_spec,
+                                       # point spec to be refreshed
+                                       current_domain_spec,
+                                       # domain spec (set of constraints)
+                                       policy = "Outliers",
+                                       period = 12,
+                                       start = c(1990, 1),
+                                       # start of series to refresh
+                                       end = c(2019, 6)
+)
+# date from which outliers will be re-detected
+
+# apply the new spec on new data : y_new = y_raw + 1 month
+
+sa_x13_v3_refreshed <- rjd3x13::x13(y_new, refreshed_spec)
+```
+
+
+### Refreshed spec: an example {.allowframebreaks} 
+
+\small 
+
+\footnotesize
+```{r,eval = TRUE, echo = TRUE}
+# refreshed spec
+refreshed_spec$regarima
+```
