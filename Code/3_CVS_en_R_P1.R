@@ -18,15 +18,18 @@ ipi <- read.csv2("Data/IPI_nace4.csv")
 str(ipi)
 ipi$DATE <- as.Date(ipi$DATE, format = "%d/%m/%Y")
 ipi[, -1] <- sapply(ipi[, -1], as.numeric)
-View(ipi)
+#View(ipi)
 
 # si donnees excel
 # ipi_nace4_ind <- read_excel("Data/ipi_nace4_ind.xlsx")
 # View(ipi_nace4_ind)
 
+ipi[1,"RF3030"]
 
  # creating a TS object from a data frame
 y_raw <- ts(ipi[, "RF3030"], frequency = 12, start = c(1990, 1), end = c(2024, 1))
+y_raw[1]
+
 y_raw<- window(y_raw, start=c(2012,1))
 
 
@@ -205,8 +208,25 @@ sa_x13_v3$result$decomposition$d5  #tables from D1 to D13
 
  # retrieve the object
  sa_x13_v3_UD$user_defined$cal
+ 
+ 
+ ## Plots in v3
 
- ########################################################################################
+ #remotes::install_github("AQLT/ggdemetra3", INSTALL_opts = "--no-multiarch")
+ library("ggdemetra3")
+  
+# Plot of the final decomposition
+ plot(sa_x13_v3)
+ # avec le format autoplot 
+ library("ggplot2")
+ autoplot(sa_x13_v3)
+
+ #Plot SI ratios
+ siratioplot(sa_x13_v3)
+# avec le format autoplot 
+ ggsiratioplot(sa_x13_v3)
+
+########################################################################################
 ###                         Specification customization
  
 ############################# version 2 
@@ -230,20 +250,21 @@ sa_x13_v3$result$decomposition$d5  #tables from D1 to D13
 
 # Estimation with new spec  (new sa processing)
  sa_x13_v2_2 <- RJDemetra::x13(y_raw, spec_2)
- sa_x13_v2_2$final$series
+ # print spec and see 
+ spec_2
 
 ##############################Version 3
 #start with default spec
  
 spec_1 <- x13_spec("RSA3")
 #or start with existing spec (no extraction function needed)
-spec_1 <- sa_x13_v3_UD$estimation_spec # a definir
+
 
 
 
 # ##### set basic : series span for the estimation
-x13_spec_d <- rjd3toolkit::set_basic(x13_spec_d,
-                                     type = "From", d0 = "2000-01-01",
+x13_spec_d <- rjd3toolkit::set_basic(spec_1,
+                                     type = "From", d0 = "2014-01-01",
                                      preliminary.check = TRUE,
                                      preprocessing = TRUE
 )
@@ -257,15 +278,16 @@ start(m$result$final$d11final)
 
 ## define span until d1, excluded
 x13_spec_d <- set_basic(x13_spec_d,
-                        type = "To", d1 = "2000-01-01",
+                        type = "From", d0 = "2014-01-01",
                         preliminary.check = TRUE,
                         preprocessing = TRUE
 )
 
-
+y_raw
 print(x13_spec_d)
 # check results
 m <- rjd3x13::x13(y_raw, x13_spec_d)
+m$result$final$d11final
 start(m$result$final$d11final)
 end(m$result$final$d11final)
 
@@ -282,9 +304,9 @@ m <- rjd3x13::x13(y_raw, x13_spec_d)
 start(m$result$final$d11final)
 end(m$result$final$d11final)
 
-# Excluding : N first and P Last 60 obs
+# Excluding : N first and P Last obs
 x13_spec_d <- set_basic(x13_spec_d,
-                        type = "Excluding", n0 = 60, n1 = 80,
+                        type = "Excluding", n0 = 5, n1 = 3,
                         preliminary.check = TRUE,
                         preprocessing = TRUE
 )
@@ -445,8 +467,8 @@ m$result$preprocessing$estimation$X
 
 ### X11 parameters 
 
-x11_spec <- set_x11(x13_spec_d, henderson.filter = 13)
-rjd3x13::x11(y_raw, x11_spec)
+spec_2 <- set_x11(spec_1, henderson.filter = 13)
+rjd3x13::x13(y_raw, spec_2)
  
 
 
