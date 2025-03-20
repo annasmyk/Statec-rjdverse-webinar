@@ -30,7 +30,9 @@ ipi[1,"RF3030"]
 y_raw <- ts(ipi[, "RF3030"], frequency = 12, start = c(1990, 1), end = c(2024, 1))
 y_raw[1]
 
-y_raw<- window(y_raw, start=c(2012,1))
+y_raw_2 <- ts(ipi[, "RF3030"], frequency = 12, start = c(1990, 1), end = c(2024, 6))
+
+y_new<- window(y_raw_2, start=c(2012,1))
 
 
 
@@ -239,7 +241,10 @@ sa_x13_v3$result$decomposition$d5  #tables from D1 to D13
  spec_1 <- RJDemetra::x13_spec("RSA3") # from a default spec 
  #or
  spec_1 <- RJDemetra::x13_spec(sa_x13_v2) # extracting from a model 
- spec_2 <- RJDemetra::x13_spec(spec_1, estimate.from = "2004-01-01",
+ 
+ 
+ 
+ spec_2 <- RJDemetra::x13_spec(spec_1, estimate.from = "2015-01-01",
                     usrdef.outliersEnabled = TRUE,
                     usrdef.outliersType = c("LS", "AO"),
                     usrdef.outliersDate = c("2008-10-01", "2018-01-01"),
@@ -252,8 +257,11 @@ sa_x13_v3$result$decomposition$d5  #tables from D1 to D13
  sa_x13_v2_2 <- RJDemetra::x13(y_raw, spec_2)
  # print spec and see 
  spec_2
+ 
+ sa_x13_v2_2$regarima$specification$regression$userdef$outliers
 
 ##############################Version 3
+ 
 #start with default spec
  
 spec_1 <- x13_spec("RSA3")
@@ -321,7 +329,7 @@ end(m$result$final$d11final)
 
 # ##### set estimate : length for the arima model only, can be combined with series span
 x13_spec_d <- rjd3x13::x13_spec("rsa3") # re init
-x13_spec_d <- rjd3toolkit::set_estimate(x13_spec_d, "From", d0 = "2007-01-01")
+x13_spec_d <- rjd3toolkit::set_estimate(x13_spec_d, "From", d0 = "2015-01-01")
 
 
 print(x13_spec_d)
@@ -336,7 +344,7 @@ end(m$result$final$d11final)
 x13_spec_d <- rjd3toolkit::set_transform(x13_spec_d,
                                          fun = "Log",
                                          outliers = TRUE
-) # big outlier detection for test: new v3 feature
+) # when auto choice: big outlier detection for test: new v3 feature
 
 
 print(x13_spec_d)
@@ -348,7 +356,7 @@ end(m$result$final$d11final)
 ## Modify automatic outlier detection parameters
 x13_spec_d <- rjd3toolkit::set_outlier(x13_spec_d,
                                        span.type = "From", d0 = "2012-01-01",
-                                       outliers.type = c("TC", "AO"), # LS are excluded
+                                       outliers.type = c("LS", "AO"), # LS are excluded
                                        critical.value = 5,
                                        tc.rate = 0.85
 )
@@ -392,6 +400,8 @@ x13_spec_d <- set_arima(x13_spec_d,
 print(x13_spec_d)
 # check results
 m <- rjd3x13::x13(y_raw, x13_spec_d)
+summary(m)
+
 
 # ### set benchmarking
 x13_spec_d <- rjd3toolkit::set_benchmarking(x13_spec_d,
@@ -405,8 +415,8 @@ x13_spec_d <- rjd3toolkit::set_benchmarking(x13_spec_d,
 # output will have to be retrieved in user defined output
 userdefined_variables_x13() # list of items
 sa_x13_d <- rjd3x13::x13(y_raw, x13_spec_d, userdefined = "benchmarking.result")
-sa_x13_d$user_defined$benchmarking.result
-
+y_bench<-sa_x13_d$user_defined$benchmarking.result
+plot(y_bench)
 # creating a spec from default
 x13_spec_d <- rjd3x13::x13_spec("rsa3")
 
@@ -444,7 +454,7 @@ print(x13_spec_d)
 m <- rjd3x13::x13(y_raw, x13_spec_d)
 m$result$preprocessing$description
 
-### Adding user defined variables
+### Pre specified outliers
 x13_spec_d <- rjd3x13::x13_spec("rsa3") # re init
 # Pre-specified outliers
 x13_spec_d <- rjd3toolkit::add_outlier(x13_spec_d, type = c("AO", "LS"), date = c("2020-03-01", "2020-04-01"))
@@ -467,7 +477,7 @@ m$result$preprocessing$estimation$X
 
 ### X11 parameters 
 
-spec_2 <- set_x11(spec_1, henderson.filter = 13)
+spec_2 <- rjd3x13::set_x11(spec_1, henderson.filter = 13)
 rjd3x13::x13(y_raw, spec_2)
  
 

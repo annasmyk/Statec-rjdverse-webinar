@@ -22,8 +22,8 @@ y_raw <- ts(ipi[, "RF3030"], frequency = 12, start = c(1990, 1), end = c(2024, 1
 y_new <- ts(ipi[, "RF3030"], frequency = 12, start = c(1990, 1), end = c(2024, 6))
 
 
-
-# extraction ds MTS 
+tail(y_raw)
+tail(y_new)
 
 # X13 v2
 sa_x13_v2 <- RJDemetra::x13(y_raw, spec = "RSA5c")
@@ -45,7 +45,7 @@ sa_x13_v3
 regs <- read_excel("Data/reg_cjo_m.xlsx")
 View(regs)
 
-mts_regs<-ts(regs,frequency = 12, start=c(1990,1))
+mts_regs<-ts(regs[,-1],frequency = 12, start=c(1990,1))
 class(mts_regs)
 head(mts_regs)
 # att date incluse, num
@@ -86,9 +86,16 @@ spec_td_t <- RJDemetra::x13_spec(spec_td,
 
 
 #new sa processing
-sa_x13_v2_5 <- RJDemetra::x13(y_raw, spec_td)
+sa_x13_v2_5 <- RJDemetra::x13(y_raw, spec_td_t)
+summary(sa_x13_v2_5)
 
+# var aux to trend
+sa_x13_v2_5$regarima$specification$regression$userdef$variables$series
+sa_x13_v2_5$regarima$regression.coefficients
 
+sa_x13_v2_5$r
+  
+####################################
 
 ################# Version 3
 
@@ -116,15 +123,29 @@ french_calendar <- national_calendar(
 
 # Luxembourg ?
 
+lux_calendar <- national_calendar(
+  days = list(
+    fixed_day(6, 23), 
+    fixed_day(12, 26),
+    fixed_day(5, 9, validity = list(start = "2019-01-01")), # End of 2nd WW
+    special_day("NEWYEAR"),
+    special_day("CHRISTMAS"),
+    special_day("MAYDAY"),
+    special_day("EASTERMONDAY"),
+    special_day("ASCENSION"),
+    special_day("WHITMONDAY"),
+    special_day("ASSUMPTION"),
+    special_day("ALLSAINTSDAY")
+  )
+)
+
 
 
 ### Step 2: Create regressors
 
-
-
-# create set of 6 regressors every day is different, contrast with Sunday, based on french national calendar
+# create set of (6) regressors every day is different, contrast with Sunday, based on french national calendar
 regs_td <- rjd3toolkit::calendar_td(
-  calendar = french_calendar,
+  calendar = lux_calendar,
   # formats the regressor like your raw series (length, frequency..)
   s = y_raw,
   groups = c(1, 2, 3, 4, 5, 6, 0),
@@ -195,14 +216,20 @@ x13_spec_user_defined$regarima$regression$users
 
 sa_x13_ud <- rjd3x13::x13(y_raw, x13_spec_user_defined, context = my_context)
 sa_x13_ud$result$preprocessing
+summary(sa_x13_ud)
 
 
-#The process would be identical using `rjd3tramoseats::tramoseats`
+############## REFRESH
 
 
+library(dygraphs)
+dygraph(y_raw)
 
+# start with a simple s
 
 # identify working specs
+
+
 
 # here from previous estimation with user defined variables 
 current_result_spec <- sa_x13_ud$result_spec
@@ -217,24 +244,43 @@ refreshed_spec <- rjd3x13::x13_refresh(current_result_spec,
 )
 
 # apply the new spec on new data : y_new = y_raw + 6 months
-sa_x13_v3_refreshed <- rjd3x13::x13(y_new, refreshed_spec)
+sa_x13_v3_refreshed <- rjd3x13::x13(y_new, refreshed_spec, context=my_context)
+summary(sa_x13_v3_refreshed)
 
-
-# example with re identifiaction of outliers
+# example with re identification of outliers
 refreshed_spec <- rjd3x13::x13_refresh(current_result_spec,
                                        # point spec to be refreshed
                                        current_domain_spec,
                                        # domain spec (set of constraints)
                                        policy = "Outliers",
                                        period = 12,
-                                       start = c(1990, 1),
-                                       # start of series to refresh
-                                       end = c(2019, 6)
-)
-# date from which outliers will be re-detected
+                                       start = c(2020,1)) #start of re-detection
+refreshed_spec
+# ajout d'un point aberrant dans y_new sur la fin de periode 
+tail(y_new)
+window(y_new, start=c(2024,3),end=c(2024,3))<-12
+tail(y_new)
+
+# apply the new spec on new data : y_new = y_raw + 6 months
+sa_x13_v3_refreshed <- rjd3x13::x13(y_new, refreshed_spec, context=my_context)
+summary(sa_x13_v3_refreshed)
+# on a bien L'AO idnetifié en mars 2024
+                                       
 
 # apply the new spec on new data : y_new = y_raw + 1 month...or more 
 # take into consideration what will happen to point revised in the (recent) past, not only new points 
 
-sa_x13_v3_refreshed <- rjd3x13::x13(y_new, refreshed_spec)
 
+spec_x13_ref <- x13_refresh(current_result_spec,
+                            current_domain_spec,
+                            policy = "Current",
+                            period = 12,
+                            start = c(2024, 1),
+                            end = end(y_new)
+)
+
+
+sa_x13_v3_refreshed <- rjd3x13::x13(y_new, spec_x13_ref,context=my_context)
+summary(sa_x13_v3_refreshed)
+
+sa_x13_v3_refreshed$result
