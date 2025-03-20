@@ -21,11 +21,7 @@ ipi[, -1] <- sapply(ipi[, -1], as.numeric)
 y_raw <- ts(ipi[, "RF3030"], frequency = 12, start = c(1990, 1), end = c(2024, 1))
 y_new <- ts(ipi[, "RF3030"], frequency = 12, start = c(1990, 1), end = c(2024, 6))
 
-# add comp graphiques 
 
-## add use case // GUI 
-
-### case data 
 
 # extraction ds MTS 
 
@@ -44,24 +40,55 @@ sa_x13_v3
 
 ### IN version 2
 
+# load TD regressors 
+
+regs <- read_excel("Data/reg_cjo_m.xlsx")
+View(regs)
+
+mts_regs<-ts(regs,frequency = 12, start=c(1990,1))
+class(mts_regs)
+head(mts_regs)
+# att date incluse, num
+mts_reg1_LY <-window(mts_regs[,2:3], start= c(2000,1))
+
+
+## attention : preciser package (mêmes noms dans rjd3x13)
+spec_1<-RJDemetra::x13_spec("RSA3")
+
+
 ### defining user defined trading days
-spec_td <- x13_spec(spec_1,
+spec_td <- RJDemetra::x13_spec(spec_1,
                     tradingdays.option = "UserDefined",
                     tradingdays.test ="None",
                     usrdef.varEnabled = TRUE,
                     #the user defined variable will be assigned to the calendar component
                     usrdef.varType="Calendar",
-                    usrdef.var=td_regs )  #regressors have to be a single or multiple TS
-new sa processing
-sa_x13_v2_4 <- x13(y_raw, spec_td)
-user defined intervention variable
-spec_int <- x13_spec(spec_1,
+                    usrdef.var= mts_reg1_LY )  #regressors have to be a single or multiple TS
+# new sa processing
+sa_x13_v2_4 <- RJDemetra::x13(y_raw, spec_td)
+# user defined intervention variable
+
+start(y_raw)
+end(y_raw)
+
+var_aux <- ts(c(rep(0,length(y_raw))), start=c(2012,1))
+window(var_aux, start=c(2020), end=c(2020,12))<-1
+plot(var_aux)
+
+spec_td_t <- RJDemetra::x13_spec(spec_td,
                      usrdef.varEnabled = TRUE,
-                     the user defined variable will be assigned to the trend component
+                     #the user defined variable will be assigned to the trend component
                      usrdef.varType = "Trend",
-                     usrdef.var = x )  x has to to be a single or multiple TS
-new sa processing
-sa_x13_v2_5 <- x13(y_raw, spec_int)
+                     usrdef.var = var_aux )  #x has to to be a single or multiple TS
+# print spec 
+
+# see results 
+
+
+#new sa processing
+sa_x13_v2_5 <- RJDemetra::x13(y_raw, spec_td)
+
+
 
 ################# Version 3
 
